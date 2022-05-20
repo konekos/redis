@@ -182,6 +182,7 @@ void clientInstallWriteHandler(client *c) {
          * a system call. We'll only really install the write handler if
          * we'll not be able to write the whole reply at once. */
         c->flags |= CLIENT_PENDING_WRITE;
+        /*写入待发送链表  由 beforesleep 函数遍历   缓冲区是存在 client 里*/
         listAddNodeHead(server.clients_pending_write,c);
     }
 }
@@ -295,9 +296,13 @@ void _addReplyStringToList(client *c, const char *s, size_t len) {
 
 /* Add the object 'obj' string representation to the client output buffer. */
 void addReply(client *c, robj *obj) {
+
+    /* 判断是否需要返回*/
     if (prepareClientToWrite(c) != C_OK) return;
 
     if (sdsEncodedObject(obj)) {
+
+        /*先写入缓冲区 如果失败，写入应答链表*/
         if (_addReplyToBuffer(c,obj->ptr,sdslen(obj->ptr)) != C_OK)
             _addReplyStringToList(c,obj->ptr,sdslen(obj->ptr));
     } else if (obj->encoding == OBJ_ENCODING_INT) {
@@ -1093,6 +1098,7 @@ int handleClientsWithPendingWrites(void) {
             {
                 ae_flags |= AE_BARRIER;
             }
+            // 注册写事件
             if (aeCreateFileEvent(server.el, c->fd, ae_flags,
                 sendReplyToClient, c) == AE_ERR)
             {
@@ -1267,6 +1273,7 @@ static void setProtocolError(const char *errstr, client *c) {
 int processMultibulkBuffer(client *c) {
     char *newline = NULL;
     int ok;
+    
     long long ll;
 
     if (c->multibulklen == 0) {
@@ -1301,6 +1308,7 @@ int processMultibulkBuffer(client *c) {
 
         if (ll <= 0) return C_OK;
 
+        // 处理粘包，ll 是还需要读的字节数。
         c->multibulklen = ll;
 
         /* Setup argv array on client structure */
@@ -1309,6 +1317,8 @@ int processMultibulkBuffer(client *c) {
     }
 
     serverAssertWithInfo(c,NULL,c->multibulklen > 0);
+
+    // 解析协议。
     while(c->multibulklen) {
         /* Read bulk length if unknown */
         if (c->bulklen == -1) {
@@ -1403,6 +1413,8 @@ int processMultibulkBuffer(client *c) {
  * more query buffer to process, because we read more data from the socket
  * or because a client was blocked and later reactivated, so there could be
  * pending query buffer, already representing a full command, to process. */
+
+// 处理客户端发来的字节
 void processInputBuffer(client *c) {
     server.current_client = c;
 
@@ -1435,10 +1447,11 @@ void processInputBuffer(client *c) {
                 c->reqtype = PROTO_REQ_INLINE;
             }
         }
-
+        // 内联请求 // telnet
         if (c->reqtype == PROTO_REQ_INLINE) {
             if (processInlineBuffer(c) != C_OK) break;
         } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
+            // 普通命令请求
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");

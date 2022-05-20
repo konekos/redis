@@ -707,6 +707,9 @@ typedef struct readyList {
 /* With multiplexing we need to take per-client state.
  * Clients are taken in a linked list. */
 typedef struct client {
+
+    // 客户端数据结构
+
     uint64_t id;            /* Client incremental unique ID. */
     int fd;                 /* Client socket. */
     redisDb *db;            /* Pointer to currently SELECTed DB. */
@@ -758,6 +761,9 @@ typedef struct client {
     dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */
     list *pubsub_patterns;  /* patterns a client is interested in (SUBSCRIBE) */
     sds peerid;             /* Cached peer ID. */
+
+    /*发送缓冲区*/
+
     listNode *client_list_node; /* list node in client list */
 
     /* Response buffer */
@@ -1290,8 +1296,12 @@ typedef int *redisGetKeysProc(struct redisCommand *cmd, robj **argv, int argc, i
 struct redisCommand {
     char *name;
     redisCommandProc *proc;
-    int arity;
+    int arity; // 参数数目校验
+
+    /* 命令表示 w：写。r：读。F：命令超时。m：内存不足，不执行。 可能出现多个*/
     char *sflags; /* Flags as string representation, one char per flag. */
+
+    /*转换上面的 flag 为二进制的 mask*/
     int flags;    /* The actual flags, obtained from the 'sflags' field. */
     /* Use a function to determine keys arguments in a command line.
      * Used for Redis Cluster redirect. */
@@ -1300,6 +1310,8 @@ struct redisCommand {
     int firstkey; /* The first argument that's a key (0 = no keys) */
     int lastkey;  /* The last argument that's a key */
     int keystep;  /* The step between first and last key */
+
+    /* 从服务器启动至今的时间和命令次数*/
     long long microseconds, calls;
 };
 

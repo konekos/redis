@@ -755,6 +755,7 @@ static int cliConnect(int flags) {
         }
 
         if (config.hostsocket == NULL) {
+            // 连接
             context = redisConnect(config.hostip,config.hostport);
         } else {
             context = redisConnectUnix(config.hostsocket);
@@ -1052,6 +1053,7 @@ static int cliReadReply(int output_raw_strings) {
         cliRefreshPrompt();
     }
 
+    // 输出出去。
     if (output) {
         if (output_raw_strings) {
             out = cliFormatReplyRaw(reply);
@@ -1140,6 +1142,9 @@ static int cliSendCommand(int argc, char **argv, long repeat) {
         argvlen[j] = sdslen(argv[j]);
 
     while(repeat-- > 0) {
+
+        // 命令字符串转 resp 协议格式。
+        
         redisAppendCommandArgv(context,argc,(const char**)argv,argvlen);
         while (config.monitor_mode) {
             if (cliReadReply(output_raw) != REDIS_OK) exit(1);
@@ -1162,6 +1167,7 @@ static int cliSendCommand(int argc, char **argv, long repeat) {
             return REDIS_ERR;  /* Error = slaveMode lost connection to master */
         }
 
+        // 读取响应
         if (cliReadReply(output_raw) != REDIS_OK) {
             zfree(argvlen);
             return REDIS_ERR;
@@ -1544,6 +1550,8 @@ static char **convertToSds(int count, char** args) {
 static int issueCommandRepeat(int argc, char **argv, long repeat) {
     while (1) {
         config.cluster_reissue_command = 0;
+
+        // 发送命令
         if (cliSendCommand(argc,argv,repeat) != REDIS_OK) {
             cliConnect(CC_FORCE);
 
@@ -1639,6 +1647,9 @@ static void repl(void) {
 
     /* Initialize the help and, if possible, use the COMMAND command in order
      * to retrieve missing entries. */
+
+    // linenoise 行输入的包
+
     cliInitHelp();
     cliIntegrateHelp();
 
@@ -1658,14 +1669,14 @@ static void repl(void) {
         }
         cliLoadPreferences();
     }
-
+    // 刷新输入包
     cliRefreshPrompt();
     while((line = linenoise(context ? config.prompt : "not connected> ")) != NULL) {
         if (line[0] != '\0') {
             long repeat = 1;
             int skipargs = 0;
             char *endptr = NULL;
-
+            // 输入命令分割成 sds 数组。
             argv = cliSplitArgs(line,&argc);
 
             /* check if we have a repeat command option and
@@ -1723,8 +1734,12 @@ static void repl(void) {
                 } else if (argc == 1 && !strcasecmp(argv[0],"clear")) {
                     linenoiseClearScreen();
                 } else {
+
+                    // 进行命令发送
+
                     long long start_time = mstime(), elapsed;
 
+                    // 循环处理命令
                     issueCommandRepeat(argc-skipargs, argv+skipargs, repeat);
 
                     /* If our debugging session ended, show the EVAL final
@@ -6653,6 +6668,7 @@ int main(int argc, char **argv) {
         config.output = OUTPUT_STANDARD;
     config.mb_delim = sdsnew("\n");
 
+    // 处理用户传入参数
     firstarg = parseOptions(argc,argv);
     argc -= firstarg;
     argv += firstarg;
@@ -6668,6 +6684,7 @@ int main(int argc, char **argv) {
         clusterManagerMode(proc);
     }
 
+    // 不同的启动模式
     /* Latency mode */
     if (config.latency_mode) {
         if (cliConnect(0) == REDIS_ERR) exit(1);

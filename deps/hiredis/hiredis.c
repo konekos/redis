@@ -474,6 +474,8 @@ int redisFormatCommand(char **target, const char *format, ...) {
  * lengths. If the latter is set to NULL, strlen will be used to compute the
  * argument lengths.
  */
+
+// 将命令转成 resp 协议。
 int redisFormatSdsCommandArgv(sds *target, int argc, const char **argv,
                               const size_t *argvlen)
 {
@@ -672,6 +674,9 @@ int redisReconnect(redisContext *c) {
  * context will be set to the return value of the error function.
  * When no set of reply functions is given, the default set will be used. */
 redisContext *redisConnect(const char *ip, int port) {
+
+    // hiredis 中的方法。
+
     redisContext *c;
 
     c = redisContextInit();
@@ -868,6 +873,8 @@ int redisGetReplyFromReader(redisContext *c, void **reply) {
 }
 
 int redisGetReply(redisContext *c, void **reply) {
+
+    // 在 hredis 里
     int wdone = 0;
     void *aux = NULL;
 
@@ -879,11 +886,15 @@ int redisGetReply(redisContext *c, void **reply) {
     if (aux == NULL && c->flags & REDIS_BLOCK) {
         /* Write until done */
         do {
+
+            // 循环写，写出去。
             if (redisBufferWrite(c,&wdone) == REDIS_ERR)
                 return REDIS_ERR;
         } while (!wdone);
 
         /* Read until there is a reply */
+
+        // 循环读，读完。
         do {
             if (redisBufferRead(c) == REDIS_ERR)
                 return REDIS_ERR;
