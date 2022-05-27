@@ -802,16 +802,27 @@ struct sharedObjectsStruct {
 typedef struct zskiplistNode {
     sds ele;
     double score;
+    /* 指向最底层的上一个*/
     struct zskiplistNode *backward;
     struct zskiplistLevel {
+        /* 指向本层的下一个*/
         struct zskiplistNode *forward;
+        /*本节点到下个节点跳过的节点数量*/
         unsigned long span;
     } level[];
 } zskiplistNode;
 
 typedef struct zskiplist {
+
+    /* 头尾指针*/
+    /* 头节点，特殊节点 level 64 个， ele=null，score=0，backward = null，每层的forward=null。*/
+    /* 尾节点 */
     struct zskiplistNode *header, *tail;
+
+    /* 跳跃表长度，除头节点之外的节点总数*/
     unsigned long length;
+
+    /* 层高*/
     int level;
 } zskiplist;
 

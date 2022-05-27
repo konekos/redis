@@ -68,7 +68,10 @@ int zslLexValueLteMax(sds value, zlexrangespec *spec);
 
 /* Create a skiplist node with the specified number of levels.
  * The SDS string 'ele' is referenced by the node after the call. */
+
+/* 层高，分值，成员*/
 zskiplistNode *zslCreateNode(int level, double score, sds ele) {
+    /* 申请内存 node + level*/
     zskiplistNode *zn =
         zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
     zn->score = score;
@@ -79,17 +82,27 @@ zskiplistNode *zslCreateNode(int level, double score, sds ele) {
 /* Create a new skiplist. */
 zskiplist *zslCreate(void) {
     int j;
+    /*链表指针*/
     zskiplist *zsl;
-
+    /*分配内存*/
     zsl = zmalloc(sizeof(*zsl));
+    /* level=1 */
     zsl->level = 1;
+    /* 长度=0，不算头节点 */
     zsl->length = 0;
+
+    /* 创建头节点 */
     zsl->header = zslCreateNode(ZSKIPLIST_MAXLEVEL,0,NULL);
+
+    /* 头节点 0-63 level 赋值*/
     for (j = 0; j < ZSKIPLIST_MAXLEVEL; j++) {
         zsl->header->level[j].forward = NULL;
         zsl->header->level[j].span = 0;
     }
+
+    /* 头节点 backward 为 null*/
     zsl->header->backward = NULL;
+    /* tail 为 null*/
     zsl->tail = NULL;
     return zsl;
 }

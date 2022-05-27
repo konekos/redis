@@ -1239,6 +1239,8 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                 backgroundSaveDoneHandler(exitcode,bysignal);
                 if (!bysignal && exitcode == 0) receiveChildInfo();
             } else if (pid == server.aof_child_pid) {
+
+                /* 子进程完成 aof 重写，父进程进行收尾工作 */
                 backgroundRewriteDoneHandler(exitcode,bysignal);
                 if (!bysignal && exitcode == 0) receiveChildInfo();
             } else {
@@ -2327,6 +2329,7 @@ void propagate(struct redisCommand *cmd, int dbid, robj **argv, int argc,
                int flags)
 {
     if (server.aof_state != AOF_OFF && flags & PROPAGATE_AOF)
+        /* 写到 aof buf*/
         feedAppendOnlyFile(cmd,dbid,argv,argc);
     if (flags & PROPAGATE_REPL)
         replicationFeedSlaves(server.slaves,dbid,argv,argc);
@@ -2423,6 +2426,7 @@ void preventCommandReplication(client *c) {
  *
  */
 void call(client *c, int flags) {
+    /* 命令调用的入口 */
     long long dirty, start, duration;
     int client_old_flags = c->flags;
     struct redisCommand *real_cmd = c->cmd;
@@ -2509,6 +2513,9 @@ void call(client *c, int flags) {
         /* Call propagate() only if at least one of AOF / replication
          * propagation is needed. Note that modules commands handle replication
          * in an explicit way, so we never replicate them automatically. */
+        
+        /* 开启了 aof / replication 的话，就 propagate*/
+
         if (propagate_flags != PROPAGATE_NONE && !(c->cmd->flags & CMD_MODULE))
             propagate(c->cmd,c->db->id,c->argv,c->argc,propagate_flags);
     }
@@ -3869,9 +3876,11 @@ int checkForSentinelMode(int argc, char **argv) {
 void loadDataFromDisk(void) {
     long long start = ustime();
     if (server.aof_state == AOF_ON) {
+        /*加载 aof */
         if (loadAppendOnlyFile(server.aof_filename) == C_OK)
             serverLog(LL_NOTICE,"DB loaded from append only file: %.3f seconds",(float)(ustime()-start)/1000000);
     } else {
+        /*加载 aof */
         rdbSaveInfo rsi = RDB_SAVE_INFO_INIT;
         if (rdbLoad(server.rdb_filename,&rsi) == C_OK) {
             serverLog(LL_NOTICE,"DB loaded from disk: %.3f seconds",

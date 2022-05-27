@@ -1999,7 +1999,7 @@ int rdbLoadRio(rio *rdb, rdbSaveInfo *rsi, int loading_aof) {
                 decrRefCount(aux);
             }
         }
-
+        /* 读取 key value */
         /* Read key */
         if ((key = rdbLoadStringObject(rdb)) == NULL) goto eoferr;
         /* Read value */

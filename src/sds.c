@@ -42,6 +42,8 @@
 const char *SDS_NOINIT = "SDS_NOINIT";
 
 static inline int sdsHdrSize(char type) {
+
+    /* 掩码，sdshdr5的flag的高5位与运算后还是0 不影响 */
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
             return sizeof(struct sdshdr5);
@@ -87,23 +89,37 @@ static inline char sdsReqType(size_t string_size) {
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
 sds sdsnewlen(const void *init, size_t initlen) {
-    void *sh;
-    sds s;
+    void *sh;  // sds 的指针
+    sds s;  // buf 的指针
+
+    /* 根据长度确定 sds struct */
     char type = sdsReqType(initlen);
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */
+
+    /* sdshdr5 的空串，基本用于追加的，转为 sdshdr8， 方便扩容*/
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
+
+    /*根据 type 返回 struct 的 size*/
     int hdrlen = sdsHdrSize(type);
+
+    /* flag 的指针*/
     unsigned char *fp; /* flags pointer. */
 
+    /* jemalloc 分配 struct size + init len + 1 的长度*/
     sh = s_malloc(hdrlen+initlen+1);
     if (init==SDS_NOINIT)
         init = NULL;
     else if (!init)
         memset(sh, 0, hdrlen+initlen+1);
     if (sh == NULL) return NULL;
+    /*指针运算，加上头size 得到 buf 指针*/
     s = (char*)sh+hdrlen;
+    /*指针运算，buf 指针 -1，得到 flags 指针*/
     fp = ((unsigned char*)s)-1;
+
+    /* 根据不同的 type ，赋初始值*/
+
     switch(type) {
         case SDS_TYPE_5: {
             *fp = type | (initlen << SDS_TYPE_BITS);
@@ -138,9 +154,15 @@ sds sdsnewlen(const void *init, size_t initlen) {
             break;
         }
     }
+
+    /* 拷贝 */
     if (initlen && init)
         memcpy(s, init, initlen);
+
+    /* 结束符*/
     s[initlen] = '\0';
+
+    /*返回的 buf 指针*/
     return s;
 }
 
@@ -191,7 +213,11 @@ void sdsupdatelen(sds s) {
  * so that next append operations will not require allocations up to the
  * number of bytes previously available. */
 void sdsclear(sds s) {
+
+    /* 根据不同 type，设置已使用长度 len */
     sdssetlen(s, 0);
+
+    /* 清空 buf */
     s[0] = '\0';
 }
 
@@ -203,45 +229,73 @@ void sdsclear(sds s) {
  * by sdslen(), but only the free buffer space we have. */
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     void *sh, *newsh;
+
+    /* alloc - len */
     size_t avail = sdsavail(s);
     size_t len, newlen;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
     int hdrlen;
 
     /* Return ASAP if there is enough space left. */
+
+    /* 空间充足 */
     if (avail >= addlen) return s;
 
+    /* 当前串已使用 len */
     len = sdslen(s);
+
+    /* 当前 sds 的struct 头指针*/
     sh = (char*)s-sdsHdrSize(oldtype);
+
+    /* 新长度 < 1M ---> 新长度*2 (空间预留)*/
+    /* 新长度 >= 1M ---> 新长度 + 1024*1024 (空间预留)*/
     newlen = (len+addlen);
     if (newlen < SDS_MAX_PREALLOC)
         newlen *= 2;
     else
         newlen += SDS_MAX_PREALLOC;
 
+    /* 确定新长度的 sds struct 类型*/
     type = sdsReqType(newlen);
 
     /* Don't use type 5: the user is appending to the string and type 5 is
      * not able to remember empty space, so sdsMakeRoomFor() must be called
      * at every appending operation. */
+
+    /* 不使用 hdr5 */
+
     if (type == SDS_TYPE_5) type = SDS_TYPE_8;
 
     hdrlen = sdsHdrSize(type);
     if (oldtype==type) {
+
+        /* 原 buf 扩容 */
         newsh = s_realloc(sh, hdrlen+newlen+1);
         if (newsh == NULL) return NULL;
+
+        /* 返回 buf 指针*/
         s = (char*)newsh+hdrlen;
     } else {
         /* Since the header size changes, need to move the string forward,
          * and can't use realloc */
+
+        /* 申请新的 sds */
+
         newsh = s_malloc(hdrlen+newlen+1);
         if (newsh == NULL) return NULL;
+        /* 拷贝原来的 buf*/
         memcpy((char*)newsh+hdrlen, s, len+1);
+        /* 释放老 sds*/
         s_free(sh);
+
+        /* 返回新的 buf 指针*/
         s = (char*)newsh+hdrlen;
+        /* 设置长度*/
         s[-1] = type;
         sdssetlen(s, len);
     }
+
+    /* 设置总长度 */
     sdssetalloc(s, newlen);
     return s;
 }
@@ -391,11 +445,17 @@ sds sdsgrowzero(sds s, size_t len) {
  * After the call, the passed sds string is no longer valid and all the
  * references must be substituted with the new pointer returned by the call. */
 sds sdscatlen(sds s, const void *t, size_t len) {
-    size_t curlen = sdslen(s);
 
+    /* 当前已使用长度 len */
+    size_t curlen = sdslen(s);
+    /* 判断是否扩容，扩容则返回的是新 sds */
     s = sdsMakeRoomFor(s,len);
     if (s == NULL) return NULL;
+
+    /* 拷贝函数 */
     memcpy(s+curlen, t, len);
+
+    /* 设置新长度 */
     sdssetlen(s, curlen+len);
     s[curlen+len] = '\0';
     return s;
